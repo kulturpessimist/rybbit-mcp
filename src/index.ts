@@ -402,6 +402,9 @@ async function main() {
     });
 
     app.get("/sse", async (req, res) => {
+      if (transport) {
+        try { await server.close(); } catch (err) {}
+      }
       transport = new SSEServerTransport("/messages", res);
       await server.connect(transport);
     });

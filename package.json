@@ -1,0 +1,40 @@
+{
+  "name": "rybbit-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Rybbit Analytics — query overview metrics, top pages/referrers/countries, live visitors, and sessions from Claude.",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "rybbit-mcp": "build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js','755')\"",
+    "watch": "tsc --watch",
+    "start": "node build/index.js",
+    "inspector": "npx @modelcontextprotocol/inspector node build/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "rybbit",
+    "analytics",
+    "claude"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "express": "^5.2.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  rybbit-mcp:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # Required environment variables
+      - RYBBIT_URL=${RYBBIT_URL:-https://app.rybbit.io}
+      - RYBBIT_API_KEY=${RYBBIT_API_KEY}
+    restart: unless-stopped

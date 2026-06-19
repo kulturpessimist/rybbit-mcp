@@ -14,6 +14,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
+import cors from "cors";
 import { z } from "zod";
 import { RybbitApiError, RybbitClient, type FilterObject } from "./rybbit-client.js";
 
@@ -383,6 +384,7 @@ async function main() {
 
   if (useSse) {
     const app = express();
+    app.use(cors());
     const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
     
     let transport: SSEServerTransport | null = null;
@@ -405,11 +407,18 @@ async function main() {
     });
 
     app.post("/messages", async (req, res) => {
-      if (!transport) {
-        res.status(400).send("Session not initialized");
-        return;
+      try {
+        if (!transport) {
+          res.status(400).send("Session not initialized");
+          return;
+        }
+        await transport.handlePostMessage(req, res);
+      } catch (err) {
+        console.error("Unhandled error in /messages:", err);
+        if (!res.headersSent) {
+          res.status(500).send("Internal Server Error");
+        }
       }
-      await transport.handlePostMessage(req, res);
     });
 
     app.listen(port, "0.0.0.0", () => {

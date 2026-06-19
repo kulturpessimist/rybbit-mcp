@@ -32,10 +32,12 @@ if (!RYBBIT_URL || !RYBBIT_API_KEY) {
 
 const client = new RybbitClient({ baseUrl: RYBBIT_URL, apiKey: RYBBIT_API_KEY });
 
-const server = new McpServer({
-  name: "rybbit-mcp",
-  version: "0.1.0",
-});
+function createServerInstance(): McpServer {
+  console.log("[DEBUG] Creating new McpServer instance...");
+  const server = new McpServer({
+    name: "rybbit-mcp",
+    version: "0.1.0",
+  });
 
 // ---------- shared schema fragments ----------
 
@@ -364,18 +366,40 @@ server.registerTool(
     inputSchema: {
       site: siteIdParam,
       ...timeParamsShape,
-      filters: filtersParam,
-    },
-  },
-  async ({ site, filters, ...time }) => {
-    try {
-      const data = await client.getSessionLocations(site, { ...time, filters: toFilters(filters) });
-      return textResult(data);
-    } catch (err) {
-      return errorResult(err);
+      server.tool(
+    "get_overview",
+    "Get high-level summary (sessions, views, visitors, duration, bounce rate)",
+    timeParamsShape,
+    async (args) => {
+      console.log(`[DEBUG] get_overview called with args:`, args);
+      try {
+        const data = await client.request("/api/website/overview", args);
+        return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+      } catch (err) {
+        console.error(`[ERROR] get_overview failed:`, err);
+        throw err;
+      }
     }
-  }
-);
+  );
+
+  server.tool(
+    "get_pageviews",
+    "Get top pages viewed",
+    timeParamsShape,
+    async (args) => {
+      console.log(`[DEBUG] get_pageviews called with args:`, args);
+      try {
+        const data = await client.request("/api/website/pageviews", args);
+        return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+      } catch (err) {
+        console.error(`[ERROR] get_pageviews failed:`, err);
+        throw err;
+      }
+    }
+  );
+
+  return server;
+}
 
 // ---------- entrypoint ----------
 
@@ -387,7 +411,8 @@ async function main() {
     app.use(cors());
     const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
     
-    let transport: SSEServerTransport | null = null;
+    const transports = new Map<string, SSEServerTransport>();
+    const servers = new Map<string, McpServer>();
 
     app.get("/", (req, res) => {
       res.send(`
@@ -402,25 +427,51 @@ async function main() {
     });
 
     app.get("/sse", async (req, res) => {
-      console.log("New SSE connection...");
-      if ((server as any).server) {
-        (server as any).server._transport = undefined;
-      } else {
-        (server as any)._transport = undefined;
+      console.log(`[SSE] New connection from ${req.ip}`);
+      try {
+        const transport = new SSEServerTransport("/messages", res);
+        console.log(`[SSE] Transport initialized. Session ID: ${transport.sessionId}`);
+        
+        const serverInstance = createServerInstance();
+        await serverInstance.connect(transport);
+        console.log(`[SSE] Server connected to transport for session ${transport.sessionId}`);
+        
+        transports.set(transport.sessionId, transport);
+        servers.set(transport.sessionId, serverInstance);
+        
+        res.on('close', () => {
+          console.log(`[SSE] Connection closed for session ${transport.sessionId}`);
+          transports.delete(transport.sessionId);
+          servers.delete(transport.sessionId);
+        });
+      } catch (err) {
+        console.error(`[SSE] Error during connection setup:`, err);
+        if (!res.headersSent) res.status(500).send("Failed to setup SSE");
       }
-      transport = new SSEServerTransport("/messages", res);
-      await server.connect(transport);
     });
 
     app.post("/messages", async (req, res) => {
+      console.log(`[POST /messages] Request received from ${req.ip}. Query:`, req.query);
       try {
-        if (!transport) {
-          res.status(400).send("Session not initialized");
+        const sessionId = req.query.sessionId as string;
+        if (!sessionId) {
+          console.log(`[POST /messages] Error: Missing sessionId`);
+          res.status(400).send("Missing sessionId");
           return;
         }
+        
+        const transport = transports.get(sessionId);
+        if (!transport) {
+          console.log(`[POST /messages] Error: Session not found for ID ${sessionId}`);
+          res.status(404).send("Session not found");
+          return;
+        }
+        
+        console.log(`[POST /messages] Forwarding message to transport for session ${sessionId}...`);
         await transport.handlePostMessage(req, res);
+        console.log(`[POST /messages] Message handled successfully.`);
       } catch (err) {
-        console.error("Unhandled error in /messages:", err);
+        console.error("[POST /messages] Unhandled error:", err);
         if (!res.headersSent) {
           res.status(500).send("Internal Server Error");
         }
@@ -431,6 +482,7 @@ async function main() {
       console.log(`[rybbit-mcp] Server running on SSE at http://0.0.0.0:${port}/sse`);
     });
   } else {
+    const server = createServerInstance();
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error("[rybbit-mcp] Server running on stdio");

@@ -402,11 +402,13 @@ async function main() {
     });
 
     app.get("/sse", async (req, res) => {
-      if (transport) {
-        try { await server.close(); } catch (err) {}
-      }
+      console.log("New SSE connection...");
       transport = new SSEServerTransport("/messages", res);
       await server.connect(transport);
+      res.on('close', () => {
+        console.log("Client disconnected. Exiting process to reset state...");
+        process.exit(0);
+      });
     });
 
     app.post("/messages", async (req, res) => {

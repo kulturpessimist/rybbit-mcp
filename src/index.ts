@@ -386,7 +386,7 @@ server.registerTool(
     async (args) => {
       console.log(`[DEBUG] get_overview called with args:`, args);
       try {
-        const data = await client.request("/api/website/overview", args);
+        const data = await client.request("/api/website/overview", { query: args });
         return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
       } catch (err) {
         console.error(`[ERROR] get_overview failed:`, err);
@@ -402,7 +402,7 @@ server.registerTool(
     async (args) => {
       console.log(`[DEBUG] get_pageviews called with args:`, args);
       try {
-        const data = await client.request("/api/website/pageviews", args);
+        const data = await client.request("/api/website/pageviews", { query: args });
         return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
       } catch (err) {
         console.error(`[ERROR] get_pageviews failed:`, err);

@@ -82,7 +82,7 @@ export class RybbitClient {
     this.apiKey = config.apiKey;
   }
 
-  private async request<T>(
+  public async request<T>(
     path: string,
     options: {
       method?: "GET" | "POST" | "PUT" | "DELETE";

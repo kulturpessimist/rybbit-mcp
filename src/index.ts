@@ -14,12 +14,15 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
+import type { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import { z } from "zod";
 import { RybbitApiError, RybbitClient, type FilterObject } from "./rybbit-client.js";
 
 const RYBBIT_URL = process.env.RYBBIT_URL;
 const RYBBIT_API_KEY = process.env.RYBBIT_API_KEY;
+const MCP_TOKEN = process.env.MCP_TOKEN;
+const USE_SSE = process.argv.includes("--sse") || Boolean(process.env.PORT);
 
 if (!RYBBIT_URL || !RYBBIT_API_KEY) {
   console.error(
@@ -30,7 +33,45 @@ if (!RYBBIT_URL || !RYBBIT_API_KEY) {
   process.exit(1);
 }
 
+if (USE_SSE && !MCP_TOKEN) {
+  console.error(
+    "[rybbit-mcp] Missing required environment variable for SSE mode.\n" +
+      "  MCP_TOKEN - bearer token required for HTTP MCP requests\n"
+  );
+  process.exit(1);
+}
+
 const client = new RybbitClient({ baseUrl: RYBBIT_URL, apiKey: RYBBIT_API_KEY });
+
+function isToolCallMessage(message: unknown): boolean {
+  if (Array.isArray(message)) {
+    return message.some(isToolCallMessage);
+  }
+
+  return (
+    typeof message === "object" &&
+    message !== null &&
+    "method" in message &&
+    (message as { method?: unknown }).method === "tools/call"
+  );
+}
+
+function requireBearerTokenForToolCalls(req: Request, res: Response, next: NextFunction) {
+  if (!isToolCallMessage(req.body)) {
+    next();
+    return;
+  }
+
+  const authorization = req.get("authorization");
+  const expectedAuthorization = `Bearer ${MCP_TOKEN}`;
+
+  if (authorization !== expectedAuthorization) {
+    res.status(403).send("Forbidden");
+    return;
+  }
+
+  next();
+}
 
 function createServerInstance(): McpServer {
   console.log("[DEBUG] Creating new McpServer instance...");
@@ -417,9 +458,7 @@ server.registerTool(
 // ---------- entrypoint ----------
 
 async function main() {
-  const useSse = process.argv.includes("--sse") || process.env.PORT;
-
-  if (useSse) {
+  if (USE_SSE) {
     const app = express();
     app.use(cors());
     const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -469,7 +508,7 @@ async function main() {
       }
     });
 
-    app.post("/messages", async (req, res) => {
+    app.post("/messages", express.json({ limit: "4mb" }), requireBearerTokenForToolCalls, async (req, res) => {
       console.log(`[POST /messages] Request received from ${req.ip}. Query:`, req.query);
       try {
         const sessionId = req.query.sessionId as string;
@@ -487,7 +526,7 @@ async function main() {
         }
         
         console.log(`[POST /messages] Forwarding message to transport for session ${sessionId}...`);
-        await transport.handlePostMessage(req, res);
+        await transport.handlePostMessage(req, res, req.body);
         console.log(`[POST /messages] Message handled successfully.`);
       } catch (err) {
         console.error("[POST /messages] Unhandled error:", err);

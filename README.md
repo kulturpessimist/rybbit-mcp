@@ -76,13 +76,18 @@ This MCP server supports Server-Sent Events (SSE) for remote clients over HTTP. 
 2. Set the Environment Variables in CapRover:
    - `RYBBIT_URL`
    - `RYBBIT_API_KEY`
+   - `MCP_TOKEN`
    - `PORT=3000` (Optional, defaults to 3000)
 3. Under the Deployment tab, deploy using the **Captain Definition** or simply push this repository via the CapRover CLI. This repository contains a `Dockerfile` that CapRover will automatically detect and build.
 
 Once deployed, the SSE endpoint will be available at:
 `https://rybbit-mcp.your-caprover-domain.com/sse`
 
-Your remote AI agents can connect to this URL via `SSEServerTransport` instead of `stdio`.
+Your remote AI agents can connect to this URL via `SSEServerTransport` instead of `stdio`. Tool call requests sent to `/messages` must include the configured bearer token:
+
+```http
+Authorization: Bearer your-mcp-token-here
+```
 
 ### 4. Try it
 

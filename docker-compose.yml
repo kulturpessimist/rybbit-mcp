@@ -4,9 +4,10 @@ services:
   rybbit-mcp:
     build: .
     ports:
-      - "3000:3000"
+      - "${PORT:-3030}:${PORT:-3030}"
     environment:
       # Required environment variables
+      - PORT=${PORT:-3030}
       - RYBBIT_URL=${RYBBIT_URL:-https://app.rybbit.io}
       - RYBBIT_API_KEY=${RYBBIT_API_KEY}
     restart: unless-stopped

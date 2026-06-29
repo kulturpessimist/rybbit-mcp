@@ -10,4 +10,5 @@ services:
       - PORT=${PORT:-3030}
       - RYBBIT_URL=${RYBBIT_URL:-https://app.rybbit.io}
       - RYBBIT_API_KEY=${RYBBIT_API_KEY}
+      - MCP_TOKEN=${MCP_TOKEN}
     restart: unless-stopped
